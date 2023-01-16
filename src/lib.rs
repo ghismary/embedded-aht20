@@ -6,19 +6,21 @@ use embedded_hal::blocking::i2c::{Write, WriteRead};
 
 pub const AHT20_I2C_ADDRESS: u8 = 0b0011_1000; // 0x38;
 
-pub enum Command {
+enum Command {
     CheckStatus = 0b0111_0001,
     Initialization = 0b1011_1110,
     TriggerMeasurement = 0b1010_1100,
     SoftReset = 0b1011_1010,
 }
 
+#[derive(Debug)]
 pub enum Error<E> {
     I2c(E),
     InvalidCrc,
     UnexpectedBusy,
 }
 
+#[derive(Debug)]
 pub struct SensorMeasurement {
     raw_humidity: u32,
     raw_temperature: u32,
@@ -70,7 +72,7 @@ enum SensorStatusBits {
     Calibrated = 0b0000_1000,
 }
 
-pub struct SensorStatus(u8);
+struct SensorStatus(u8);
 
 impl SensorStatus {
     pub fn new(status: u8) -> Self {
@@ -86,6 +88,7 @@ impl SensorStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct AHT20<I2C, D> {
     i2c: I2C,
     address: u8,
@@ -132,7 +135,7 @@ where
         let crc = buffer[6];
         self.check_crc(data, crc)?;
 
-        let status = SensorStatus(buffer[0]);
+        let status = SensorStatus::new(buffer[0]);
         if !status.is_ready() {
             return Err(Error::UnexpectedBusy);
         }
