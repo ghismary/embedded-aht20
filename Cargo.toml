@@ -6,9 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crc-any = { version = "2.4.1", default-features = false }
-embedded-hal = "0.2.7"
-nb = "1.0.0"
+crc-any = { version = "2.4.4", default-features = false }
+embedded-hal = "1.0.0"
 
 [features]
 default = []

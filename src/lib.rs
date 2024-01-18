@@ -1,21 +1,19 @@
 #![no_std]
 
 use crc_any::CRCu8;
-use embedded_hal::blocking::delay::DelayMs;
-use embedded_hal::blocking::i2c::{Write, WriteRead};
+use embedded_hal::delay::DelayNs;
+use embedded_hal::i2c::{I2c, SevenBitAddress};
 
-pub const AHT20_I2C_ADDRESS: u8 = 0b0011_1000; // 0x38;
+pub const AHT20_I2C_ADDRESS: SevenBitAddress = 0x38;
 
-enum Command {
-    CheckStatus = 0b0111_0001,
-    Initialization = 0b1011_1110,
-    TriggerMeasurement = 0b1010_1100,
-    SoftReset = 0b1011_1010,
-}
+const CHECK_STATUS_COMMAND: &[u8] = &[0b0111_0001];
+const INITIALIZATION_COMMAND: &[u8] = &[0b1011_1110, 0x08, 0x00];
+const TRIGGER_MEASUREMENT_COMMAND: &[u8] = &[0b1010_1100, 0x33, 0x00];
+const SOFT_RESET_COMMAND: &[u8] = &[0b1011_1010];
 
 #[derive(Debug)]
-pub enum Error<E> {
-    I2c(E),
+pub enum Error<I2C: I2c> {
+    I2c(I2C::Error),
     InvalidCrc,
     UnexpectedBusy,
 }
@@ -91,44 +89,44 @@ impl SensorStatus {
 #[derive(Debug)]
 pub struct AHT20<I2C, D> {
     i2c: I2C,
-    address: u8,
+    address: SevenBitAddress,
     delay: D,
 }
 
-impl<I2C, D, E> AHT20<I2C, D>
+impl<I2C, D> AHT20<I2C, D>
 where
-    I2C: WriteRead<Error = E> + Write<Error = E>,
-    D: DelayMs<u16>,
+    I2C: I2c,
+    D: DelayNs,
 {
-    pub fn new(i2c: I2C, address: u8, delay: D) -> Result<Self, Error<E>> {
+    pub fn new(i2c: I2C, address: SevenBitAddress, delay: D) -> Result<Self, Error<I2C>> {
         let mut dev = Self {
             i2c,
             address,
             delay,
         };
 
-        dev.delay_ms(40_u16);
+        dev.delay_ms(40);
 
         while !dev.check_status()?.is_calibrated() {
             dev.send_initialize()?;
-            dev.delay_ms(10_u16);
+            dev.delay_ms(10);
         }
 
         Ok(dev)
     }
 
-    pub fn measure(&mut self) -> Result<SensorMeasurement, Error<E>> {
+    pub fn measure(&mut self) -> Result<SensorMeasurement, Error<I2C>> {
         self.send_trigger_measurement()?;
 
         // Wait for measurement to be ready
-        self.delay_ms(80_u16);
+        self.delay_ms(80);
         while !self.check_status()?.is_ready() {
-            self.delay_ms(1_u16);
+            self.delay_ms(1);
         }
 
         let mut buffer = [0u8; 7];
         self.i2c
-            .write_read(self.address, &[0u8], &mut buffer)
+            .read(self.address, &mut buffer)
             .map_err(Error::I2c)?;
 
         let data = &buffer[..6];
@@ -143,14 +141,15 @@ where
         Ok(SensorMeasurement::from(&data[1..6]))
     }
 
-    pub fn soft_reset(&mut self) -> Result<(), Error<E>> {
-        let command = [Command::SoftReset as u8];
-        self.i2c.write(self.address, &command).map_err(Error::I2c)?;
-        self.delay_ms(20u16);
+    pub fn soft_reset(&mut self) -> Result<(), Error<I2C>> {
+        self.i2c
+            .write(self.address, SOFT_RESET_COMMAND)
+            .map_err(Error::I2c)?;
+        self.delay_ms(20);
         Ok(())
     }
 
-    fn check_crc(&self, data: &[u8], crc_value: u8) -> Result<(), Error<E>> {
+    fn check_crc(&self, data: &[u8], crc_value: u8) -> Result<(), Error<I2C>> {
         let mut crc = CRCu8::create_crc(0x31, 8, 0xff, 0x00, false);
         crc.digest(data);
         if crc.get_crc() != crc_value {
@@ -159,28 +158,29 @@ where
         Ok(())
     }
 
-    fn check_status(&mut self) -> Result<SensorStatus, Error<E>> {
-        let command = [Command::CheckStatus as u8];
-        let mut buffer = [0_u8; 1];
+    fn check_status(&mut self) -> Result<SensorStatus, Error<I2C>> {
+        let mut buffer = [0];
         self.i2c
-            .write_read(self.address, &command, &mut buffer)
+            .write_read(self.address, CHECK_STATUS_COMMAND, &mut buffer)
             .map_err(Error::I2c)?;
         Ok(SensorStatus(buffer[0]))
     }
 
-    fn delay_ms(&mut self, duration: u16) {
+    fn delay_ms(&mut self, duration: u32) {
         self.delay.delay_ms(duration);
     }
 
-    fn send_initialize(&mut self) -> Result<(), Error<E>> {
-        let command = [Command::Initialization as u8, 0b0000_1000, 0b0000_0000];
-        self.i2c.write(self.address, &command).map_err(Error::I2c)?;
+    fn send_initialize(&mut self) -> Result<(), Error<I2C>> {
+        self.i2c
+            .write(self.address, INITIALIZATION_COMMAND)
+            .map_err(Error::I2c)?;
         Ok(())
     }
 
-    fn send_trigger_measurement(&mut self) -> Result<(), Error<E>> {
-        let command = [Command::TriggerMeasurement as u8, 0b0011_0011, 0b0000_0000];
-        self.i2c.write(self.address, &command).map_err(Error::I2c)?;
+    fn send_trigger_measurement(&mut self) -> Result<(), Error<I2C>> {
+        self.i2c
+            .write(self.address, TRIGGER_MEASUREMENT_COMMAND)
+            .map_err(Error::I2c)?;
         Ok(())
     }
 }
