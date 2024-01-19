@@ -1,6 +1,7 @@
 #![no_std]
 
-use crc_any::CRCu8;
+use bitflags::bitflags;
+use crc::{Crc, CRC_8_NRSC_5};
 use embedded_hal::delay::DelayNs;
 use embedded_hal::i2c::{I2c, SevenBitAddress};
 
@@ -65,24 +66,20 @@ impl SensorMeasurement {
     }
 }
 
-enum SensorStatusBits {
-    Busy = 0b1000_0000,
-    Calibrated = 0b0000_1000,
+bitflags! {
+    struct SensorStatus: u8 {
+        const BUSY = 0b1000_0000;
+        const CALIBRATED = 0b0000_1000;
+    }
 }
 
-struct SensorStatus(u8);
-
 impl SensorStatus {
-    pub fn new(status: u8) -> Self {
-        Self(status)
+    fn is_calibrated(&self) -> bool {
+        self.contains(SensorStatus::CALIBRATED)
     }
 
-    pub fn is_calibrated(&self) -> bool {
-        (self.0 & SensorStatusBits::Calibrated as u8) != 0
-    }
-
-    pub fn is_ready(&self) -> bool {
-        (self.0 & SensorStatusBits::Busy as u8) == 0
+    fn is_ready(&self) -> bool {
+        !self.contains(SensorStatus::BUSY)
     }
 }
 
@@ -133,7 +130,7 @@ where
         let crc = buffer[6];
         self.check_crc(data, crc)?;
 
-        let status = SensorStatus::new(buffer[0]);
+        let status = SensorStatus::from_bits_retain(buffer[0]);
         if !status.is_ready() {
             return Err(Error::UnexpectedBusy);
         }
@@ -150,9 +147,10 @@ where
     }
 
     fn check_crc(&self, data: &[u8], crc_value: u8) -> Result<(), Error<I2C>> {
-        let mut crc = CRCu8::create_crc(0x31, 8, 0xff, 0x00, false);
-        crc.digest(data);
-        if crc.get_crc() != crc_value {
+        let crc = Crc::<u8>::new(&CRC_8_NRSC_5);
+        let mut digest = crc.digest();
+        digest.update(data);
+        if digest.finalize() != crc_value {
             return Err(Error::InvalidCrc);
         }
         Ok(())
@@ -163,7 +161,7 @@ where
         self.i2c
             .write_read(self.address, CHECK_STATUS_COMMAND, &mut buffer)
             .map_err(Error::I2c)?;
-        Ok(SensorStatus(buffer[0]))
+        Ok(SensorStatus::from_bits_retain(buffer[0]))
     }
 
     fn delay_ms(&mut self, duration: u32) {
