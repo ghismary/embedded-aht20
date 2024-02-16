@@ -2,8 +2,16 @@
 
 use bitflags::bitflags;
 use crc::{Crc, CRC_8_NRSC_5};
+
+#[cfg(feature = "blocking")]
 use embedded_hal::delay::DelayNs;
+#[cfg(feature = "blocking")]
 use embedded_hal::i2c::{I2c, SevenBitAddress};
+
+#[cfg(not(feature = "blocking"))]
+use embedded_hal_async::delay::DelayNs;
+#[cfg(not(feature = "blocking"))]
+use embedded_hal_async::i2c::{I2c, SevenBitAddress};
 
 pub const AHT20_I2C_ADDRESS: SevenBitAddress = 0x38;
 
@@ -84,46 +92,49 @@ impl SensorStatus {
 }
 
 #[derive(Debug)]
-pub struct AHT20<I2C, D> {
+pub struct Aht20<I2C, D> {
     i2c: I2C,
     address: SevenBitAddress,
     delay: D,
 }
 
-impl<I2C, D> AHT20<I2C, D>
+impl<I2C, D> Aht20<I2C, D>
 where
     I2C: I2c,
     D: DelayNs,
 {
-    pub fn new(i2c: I2C, address: SevenBitAddress, delay: D) -> Result<Self, Error<I2C>> {
+    #[maybe_async::maybe_async]
+    pub async fn new(i2c: I2C, address: SevenBitAddress, delay: D) -> Result<Self, Error<I2C>> {
         let mut dev = Self {
             i2c,
             address,
             delay,
         };
 
-        dev.delay_ms(40);
+        dev.delay_ms(40).await;
 
-        while !dev.check_status()?.is_calibrated() {
-            dev.send_initialize()?;
-            dev.delay_ms(10);
+        while !dev.check_status().await?.is_calibrated() {
+            dev.send_initialize().await?;
+            dev.delay_ms(10).await;
         }
 
         Ok(dev)
     }
 
-    pub fn measure(&mut self) -> Result<SensorMeasurement, Error<I2C>> {
-        self.send_trigger_measurement()?;
+    #[maybe_async::maybe_async]
+    pub async fn measure(&mut self) -> Result<SensorMeasurement, Error<I2C>> {
+        self.send_trigger_measurement().await?;
 
         // Wait for measurement to be ready
-        self.delay_ms(80);
-        while !self.check_status()?.is_ready() {
-            self.delay_ms(1);
+        self.delay_ms(80).await;
+        while !self.check_status().await?.is_ready() {
+            self.delay_ms(1).await;
         }
 
         let mut buffer = [0u8; 7];
         self.i2c
             .read(self.address, &mut buffer)
+            .await
             .map_err(Error::I2c)?;
 
         let data = &buffer[..6];
@@ -138,11 +149,13 @@ where
         Ok(SensorMeasurement::from(&data[1..6]))
     }
 
-    pub fn soft_reset(&mut self) -> Result<(), Error<I2C>> {
+    #[maybe_async::maybe_async]
+    pub async fn soft_reset(&mut self) -> Result<(), Error<I2C>> {
         self.i2c
             .write(self.address, SOFT_RESET_COMMAND)
+            .await
             .map_err(Error::I2c)?;
-        self.delay_ms(20);
+        self.delay_ms(20).await;
         Ok(())
     }
 
@@ -156,28 +169,35 @@ where
         Ok(())
     }
 
-    fn check_status(&mut self) -> Result<SensorStatus, Error<I2C>> {
+    #[maybe_async::maybe_async]
+    async fn check_status(&mut self) -> Result<SensorStatus, Error<I2C>> {
         let mut buffer = [0];
         self.i2c
             .write_read(self.address, CHECK_STATUS_COMMAND, &mut buffer)
+            .await
             .map_err(Error::I2c)?;
         Ok(SensorStatus::from_bits_retain(buffer[0]))
     }
 
-    fn delay_ms(&mut self, duration: u32) {
-        self.delay.delay_ms(duration);
+    #[maybe_async::maybe_async]
+    async fn delay_ms(&mut self, duration: u32) {
+        self.delay.delay_ms(duration).await;
     }
 
-    fn send_initialize(&mut self) -> Result<(), Error<I2C>> {
+    #[maybe_async::maybe_async]
+    async fn send_initialize(&mut self) -> Result<(), Error<I2C>> {
         self.i2c
             .write(self.address, INITIALIZATION_COMMAND)
+            .await
             .map_err(Error::I2c)?;
         Ok(())
     }
 
-    fn send_trigger_measurement(&mut self) -> Result<(), Error<I2C>> {
+    #[maybe_async::maybe_async]
+    async fn send_trigger_measurement(&mut self) -> Result<(), Error<I2C>> {
         self.i2c
             .write(self.address, TRIGGER_MEASUREMENT_COMMAND)
+            .await
             .map_err(Error::I2c)?;
         Ok(())
     }

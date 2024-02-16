@@ -9,7 +9,10 @@ edition = "2021"
 bitflags = "2.4.2"
 crc = "3.0.1"
 embedded-hal = "1.0.0"
+embedded-hal-async = "1.0.0"
+maybe-async = "0.2.9"
 
 [features]
 default = []
+blocking = ["maybe-async/is_sync"]
 floating-point = []
