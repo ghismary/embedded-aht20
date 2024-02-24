@@ -1,5 +1,5 @@
-[![crates.io](https://img.shields.io/crates/v/embedded-aht30.svg)](https://crates.io/crates/embedded-aht20)
-[![License](https://img.shields.io/crates/l/embedded-aht30.svg)](https://crates.io/crates/embedded-aht20)
+[![crates.io](https://img.shields.io/crates/v/embedded-aht20.svg)](https://crates.io/crates/embedded-aht20)
+[![License](https://img.shields.io/crates/l/embedded-aht20.svg)](https://crates.io/crates/embedded-aht20)
 [![Documentation](https://docs.rs/embedded-aht20/badge.svg)](https://docs.rs/embedded-aht20)
 
 # embedded-aht20
@@ -44,9 +44,20 @@ Here are its electrical specifications:
 
 - [x] Perform a measurement of temperature and relative humidity.
 - [x] Do a sofware set.
-- [x] Include a no floating-point variant for systems without fpu.
-- [ ] Convert temperatures between °C and °F.
-- [ ] Calculate the absolute humidity from a measurement.
+- [ ] Include a no floating-point variant for systems without fpu.
+
+## Additional features
+
+This crate relies on the [`weather-utils`] crate. When you perform a
+temperature and humidity measurement, the result is a struct from the
+[`weather-utils`] crate, giving you the features provided by this crate for free.
+For example, you can immediately compute the absolute humidity value (in g/m³)
+from the result of [`Aht20::measure`]. If you are also using an other sensor,
+such as the [`QMP6988`], to get the barometric pressure, you can also compute
+the altitude.
+
+[`weather-utils`]: https://crates.io/crates/weather-utils
+[`QMP6988`]: https://crates.io/crates/embedded-qmp6988
 
 ## Usage
 
@@ -79,8 +90,8 @@ fn main() -> Result<(), embedded_aht20::Error<hal::I2CError>> {
     let measurement = sensor.measure()?;
     println!(
         "Temperature: {:.2} °C, Relative humidity: {:.2} %",
-        measurement.temperature(),
-        measurement.humidity()
+        measurement.temperature.celcius(),
+        measurement.relative_humidity
     );
     Ok(())
 }

@@ -13,6 +13,8 @@ use embedded_hal_async as hal;
 use hal::delay::DelayNs;
 use hal::i2c::{I2c, SevenBitAddress};
 
+use weather_utils::{unit::Celcius, TemperatureAndRelativeHumidity};
+
 /// The default I2C address.
 pub const DEFAULT_I2C_ADDRESS: SevenBitAddress = 0x38;
 
@@ -44,11 +46,8 @@ where
     }
 }
 
-/// The result of a measurement.
-///
-/// Such a measurement can be obtained using [`Aht20::measure()`].
 #[derive(Debug)]
-pub struct SensorMeasurement {
+struct SensorMeasurement {
     raw_humidity: u32,
     raw_temperature: u32,
 }
@@ -67,36 +66,20 @@ impl From<&[u8]> for SensorMeasurement {
 }
 
 impl SensorMeasurement {
-    #[cfg(feature = "floating-point")]
     /// The measured relative humidity (in %).
     pub fn humidity(&self) -> f32 {
         ((self.raw_humidity as f32) / ((1 << 20) as f32)) * 100.0
     }
 
     /// The measured temperature (in °C).
-    #[cfg(feature = "floating-point")]
     pub fn temperature(&self) -> f32 {
         ((self.raw_temperature as f32) / ((1 << 20) as f32)) * 200.0 - 50.0
     }
+}
 
-    /// The measured relative humidity (in %) as a tuple containing
-    /// (integral-part, fractional-part).
-    #[cfg(not(feature = "floating-point"))]
-    pub fn humidity(&self) -> (i8, i8) {
-        let percent = self.raw_humidity * 100;
-        let int_part = (percent >> 20) as i8;
-        let frac_part = (((percent % (1 << 20)) * 100) >> 20) as i8;
-        (int_part, frac_part)
-    }
-
-    /// The measured temperature (in °C) as a tuple containing
-    /// (integral-part, fractional-part).
-    #[cfg(not(feature = "floating-point"))]
-    pub fn temperature(&self) -> (i8, i8) {
-        let real = self.raw_temperature * 200;
-        let int_part = ((real >> 20) - 50) as i8;
-        let frac_part = (((real % (1 << 20)) * 100) >> 20) as i8;
-        (int_part, frac_part)
+impl From<SensorMeasurement> for TemperatureAndRelativeHumidity<Celcius> {
+    fn from(value: SensorMeasurement) -> Self {
+        TemperatureAndRelativeHumidity::<Celcius>::new(value.temperature(), value.humidity())
     }
 }
 
@@ -161,7 +144,9 @@ where
         sync(not(feature = "async"), keep_self),
         async(feature = "async", keep_self)
     )]
-    pub async fn measure(&mut self) -> Result<SensorMeasurement, Error<I2C::Error>> {
+    pub async fn measure(
+        &mut self,
+    ) -> Result<TemperatureAndRelativeHumidity<Celcius>, Error<I2C::Error>> {
         self.send_trigger_measurement().await?;
 
         // Wait for measurement to be ready
@@ -185,7 +170,8 @@ where
             return Err(Error::UnexpectedBusy);
         }
 
-        Ok(SensorMeasurement::from(&data[1..6]))
+        let measurement = SensorMeasurement::from(&data[1..6]);
+        Ok(measurement.into())
     }
 
     /// Perform a soft reset to force the device into a well-defined state
@@ -287,8 +273,8 @@ mod tests {
         let mut i2c = I2cMock::new(&expectations);
         let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
         let measurement = device.measure().unwrap();
-        assert!((measurement.temperature() - 20.18).abs() < 0.01);
-        assert!((measurement.humidity() - 48.32).abs() < 0.01);
+        assert!((measurement.temperature.celcius() - 20.18).abs() < 0.01);
+        assert!((measurement.relative_humidity - 48.32).abs() < 0.01);
         i2c.done();
     }
 
