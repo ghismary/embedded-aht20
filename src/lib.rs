@@ -258,3 +258,53 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    use embedded_hal_mock::eh1::delay::StdSleep as Delay;
+    use embedded_hal_mock::eh1::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
+
+    #[test]
+    fn measure() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, TRIGGER_MEASUREMENT_COMMAND.to_vec()),
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::read(
+                DEFAULT_I2C_ADDRESS,
+                [0b0000_1000, 0x7b, 0xb3, 0x05, 0x9d, 0x49, 0x7d].to_vec(),
+            ),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        let measurement = device.measure().unwrap();
+        assert!((measurement.temperature() - 20.18).abs() < 0.01);
+        assert!((measurement.humidity() - 48.32).abs() < 0.01);
+        i2c.done();
+    }
+
+    #[test]
+    fn soft_reset() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, SOFT_RESET_COMMAND.to_vec()),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        device.soft_reset().unwrap();
+        i2c.done();
+    }
+}
