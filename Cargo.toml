@@ -3,16 +3,20 @@ name = "embedded-aht20"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["floating-point"]
+async = []
+floating-point = []
 
 [dependencies]
 bitflags = "2.4.2"
 crc = "3.0.1"
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
-maybe-async = "0.2.9"
+maybe-async-cfg = "0.2.3"
 
-[features]
-default = []
-blocking = ["maybe-async/is_sync"]
-floating-point = []
+[dev-dependencies]
+embedded-hal-mock = { version = "0.10.0", default-features = false, features = [
+    "eh1",
+] }
+linux-embedded-hal = "0.4.0"

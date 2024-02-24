@@ -3,17 +3,15 @@
 use bitflags::bitflags;
 use crc::{Crc, CRC_8_NRSC_5};
 
-#[cfg(feature = "blocking")]
-use embedded_hal::delay::DelayNs;
-#[cfg(feature = "blocking")]
-use embedded_hal::i2c::{I2c, SevenBitAddress};
+#[cfg(not(feature = "async"))]
+use embedded_hal as hal;
+#[cfg(feature = "async")]
+use embedded_hal_async as hal;
 
-#[cfg(not(feature = "blocking"))]
-use embedded_hal_async::delay::DelayNs;
-#[cfg(not(feature = "blocking"))]
-use embedded_hal_async::i2c::{I2c, SevenBitAddress};
+use hal::delay::DelayNs;
+use hal::i2c::{I2c, SevenBitAddress};
 
-pub const AHT20_I2C_ADDRESS: SevenBitAddress = 0x38;
+pub const DEFAULT_I2C_ADDRESS: SevenBitAddress = 0x38;
 
 const CHECK_STATUS_COMMAND: &[u8] = &[0b0111_0001];
 const INITIALIZATION_COMMAND: &[u8] = &[0b1011_1110, 0x08, 0x00];
@@ -21,10 +19,22 @@ const TRIGGER_MEASUREMENT_COMMAND: &[u8] = &[0b1010_1100, 0x33, 0x00];
 const SOFT_RESET_COMMAND: &[u8] = &[0b1011_1010];
 
 #[derive(Debug)]
-pub enum Error<I2C: I2c> {
-    I2c(I2C::Error),
+pub enum Error<I2cError>
+where
+    I2cError: hal::i2c::Error,
+{
+    I2c(I2cError),
     InvalidCrc,
     UnexpectedBusy,
+}
+
+impl<I2cError> From<I2cError> for Error<I2cError>
+where
+    I2cError: hal::i2c::Error,
+{
+    fn from(value: I2cError) -> Self {
+        Error::I2c(value)
+    }
 }
 
 #[derive(Debug)]
@@ -103,8 +113,15 @@ where
     I2C: I2c,
     D: DelayNs,
 {
-    #[maybe_async::maybe_async]
-    pub async fn new(i2c: I2C, address: SevenBitAddress, delay: D) -> Result<Self, Error<I2C>> {
+    #[maybe_async_cfg::maybe(
+        sync(not(feature = "async"), keep_self),
+        async(feature = "async", keep_self)
+    )]
+    pub async fn new(
+        i2c: I2C,
+        address: SevenBitAddress,
+        delay: D,
+    ) -> Result<Self, Error<I2C::Error>> {
         let mut dev = Self {
             i2c,
             address,
@@ -121,8 +138,11 @@ where
         Ok(dev)
     }
 
-    #[maybe_async::maybe_async]
-    pub async fn measure(&mut self) -> Result<SensorMeasurement, Error<I2C>> {
+    #[maybe_async_cfg::maybe(
+        sync(not(feature = "async"), keep_self),
+        async(feature = "async", keep_self)
+    )]
+    pub async fn measure(&mut self) -> Result<SensorMeasurement, Error<I2C::Error>> {
         self.send_trigger_measurement().await?;
 
         // Wait for measurement to be ready
@@ -149,8 +169,11 @@ where
         Ok(SensorMeasurement::from(&data[1..6]))
     }
 
-    #[maybe_async::maybe_async]
-    pub async fn soft_reset(&mut self) -> Result<(), Error<I2C>> {
+    #[maybe_async_cfg::maybe(
+        sync(not(feature = "async"), keep_self),
+        async(feature = "async", keep_self)
+    )]
+    pub async fn soft_reset(&mut self) -> Result<(), Error<I2C::Error>> {
         self.i2c
             .write(self.address, SOFT_RESET_COMMAND)
             .await
@@ -159,7 +182,7 @@ where
         Ok(())
     }
 
-    fn check_crc(&self, data: &[u8], crc_value: u8) -> Result<(), Error<I2C>> {
+    fn check_crc(&self, data: &[u8], crc_value: u8) -> Result<(), Error<I2C::Error>> {
         let crc = Crc::<u8>::new(&CRC_8_NRSC_5);
         let mut digest = crc.digest();
         digest.update(data);
@@ -169,8 +192,11 @@ where
         Ok(())
     }
 
-    #[maybe_async::maybe_async]
-    async fn check_status(&mut self) -> Result<SensorStatus, Error<I2C>> {
+    #[maybe_async_cfg::maybe(
+        sync(not(feature = "async"), keep_self),
+        async(feature = "async", keep_self)
+    )]
+    async fn check_status(&mut self) -> Result<SensorStatus, Error<I2C::Error>> {
         let mut buffer = [0];
         self.i2c
             .write_read(self.address, CHECK_STATUS_COMMAND, &mut buffer)
@@ -179,13 +205,19 @@ where
         Ok(SensorStatus::from_bits_retain(buffer[0]))
     }
 
-    #[maybe_async::maybe_async]
+    #[maybe_async_cfg::maybe(
+        sync(not(feature = "async"), keep_self),
+        async(feature = "async", keep_self)
+    )]
     async fn delay_ms(&mut self, duration: u32) {
         self.delay.delay_ms(duration).await;
     }
 
-    #[maybe_async::maybe_async]
-    async fn send_initialize(&mut self) -> Result<(), Error<I2C>> {
+    #[maybe_async_cfg::maybe(
+        sync(not(feature = "async"), keep_self),
+        async(feature = "async", keep_self)
+    )]
+    async fn send_initialize(&mut self) -> Result<(), Error<I2C::Error>> {
         self.i2c
             .write(self.address, INITIALIZATION_COMMAND)
             .await
@@ -193,8 +225,11 @@ where
         Ok(())
     }
 
-    #[maybe_async::maybe_async]
-    async fn send_trigger_measurement(&mut self) -> Result<(), Error<I2C>> {
+    #[maybe_async_cfg::maybe(
+        sync(not(feature = "async"), keep_self),
+        async(feature = "async", keep_self)
+    )]
+    async fn send_trigger_measurement(&mut self) -> Result<(), Error<I2C::Error>> {
         self.i2c
             .write(self.address, TRIGGER_MEASUREMENT_COMMAND)
             .await
