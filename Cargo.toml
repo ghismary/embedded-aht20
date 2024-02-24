@@ -1,6 +1,16 @@
 [package]
 name = "embedded-aht20"
 version = "0.1.0"
+authors = ["Ghislain MARY <ghislain@ghislainmary.fr>"]
+repository = "https://gitlab.com/ghislainmary/embedded-aht20"
+license = "MIT OR Apache-2.0"
+description = "Platform-agnostic Rust driver for the AHT20 temperature & humidity sensor."
+documentation = "https://docs.rs/embedded-aht20/"
+readme = "README.md"
+keywords = ["temperature", "humidity", "sensor", "aht20", "embedded-hal"]
+categories = ["embedded", "hardware-support", "no-std"]
+homepage = "https://gitlab.com/ghislainmary/embedded-aht20"
+include = ["/**/*.rs", "/Cargo.toml", "README.md"]
 edition = "2021"
 
 [features]

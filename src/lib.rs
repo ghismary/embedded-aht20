@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+#![deny(unsafe_code, missing_docs)]
 #![no_std]
 
 use bitflags::bitflags;
@@ -11,6 +13,7 @@ use embedded_hal_async as hal;
 use hal::delay::DelayNs;
 use hal::i2c::{I2c, SevenBitAddress};
 
+/// The default I2C address.
 pub const DEFAULT_I2C_ADDRESS: SevenBitAddress = 0x38;
 
 const CHECK_STATUS_COMMAND: &[u8] = &[0b0111_0001];
@@ -18,13 +21,17 @@ const INITIALIZATION_COMMAND: &[u8] = &[0b1011_1110, 0x08, 0x00];
 const TRIGGER_MEASUREMENT_COMMAND: &[u8] = &[0b1010_1100, 0x33, 0x00];
 const SOFT_RESET_COMMAND: &[u8] = &[0b1011_1010];
 
+/// All possible errors generated when using the Aht20 struct.
 #[derive(Debug)]
 pub enum Error<I2cError>
 where
     I2cError: hal::i2c::Error,
 {
+    /// I²C bus error.
     I2c(I2cError),
+    /// The computed CRC and the one sent by the device mismatch.
     InvalidCrc,
+    /// The device is busy at a time where it was not expected to.
     UnexpectedBusy,
 }
 
@@ -37,6 +44,9 @@ where
     }
 }
 
+/// The result of a measurement.
+///
+/// Such a measurement can be obtained using [`Aht20::measure()`].
 #[derive(Debug)]
 pub struct SensorMeasurement {
     raw_humidity: u32,
@@ -58,15 +68,19 @@ impl From<&[u8]> for SensorMeasurement {
 
 impl SensorMeasurement {
     #[cfg(feature = "floating-point")]
+    /// The measured relative humidity (in %).
     pub fn humidity(&self) -> f32 {
         ((self.raw_humidity as f32) / ((1 << 20) as f32)) * 100.0
     }
 
+    /// The measured temperature (in °C).
     #[cfg(feature = "floating-point")]
     pub fn temperature(&self) -> f32 {
         ((self.raw_temperature as f32) / ((1 << 20) as f32)) * 200.0 - 50.0
     }
 
+    /// The measured relative humidity (in %) as a tuple containing
+    /// (integral-part, fractional-part).
     #[cfg(not(feature = "floating-point"))]
     pub fn humidity(&self) -> (i8, i8) {
         let percent = self.raw_humidity * 100;
@@ -75,6 +89,8 @@ impl SensorMeasurement {
         (int_part, frac_part)
     }
 
+    /// The measured temperature (in °C) as a tuple containing
+    /// (integral-part, fractional-part).
     #[cfg(not(feature = "floating-point"))]
     pub fn temperature(&self) -> (i8, i8) {
         let real = self.raw_temperature * 200;
@@ -101,6 +117,7 @@ impl SensorStatus {
     }
 }
 
+/// AHT20 device driver.
 #[derive(Debug)]
 pub struct Aht20<I2C, D> {
     i2c: I2C,
@@ -113,6 +130,7 @@ where
     I2C: I2c,
     D: DelayNs,
 {
+    /// Create a new instance of the AHT20 device.
     #[maybe_async_cfg::maybe(
         sync(not(feature = "async"), keep_self),
         async(feature = "async", keep_self)
@@ -128,8 +146,6 @@ where
             delay,
         };
 
-        dev.delay_ms(40).await;
-
         while !dev.check_status().await?.is_calibrated() {
             dev.send_initialize().await?;
             dev.delay_ms(10).await;
@@ -138,6 +154,9 @@ where
         Ok(dev)
     }
 
+    /// Perform a measurement.
+    ///
+    /// The measurement takes at least 80 ms to be performed.
     #[maybe_async_cfg::maybe(
         sync(not(feature = "async"), keep_self),
         async(feature = "async", keep_self)
@@ -169,6 +188,8 @@ where
         Ok(SensorMeasurement::from(&data[1..6]))
     }
 
+    /// Perform a soft reset to force the device into a well-defined state
+    /// without removing the power supply.
     #[maybe_async_cfg::maybe(
         sync(not(feature = "async"), keep_self),
         async(feature = "async", keep_self)
