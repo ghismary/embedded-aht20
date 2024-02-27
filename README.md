@@ -10,6 +10,10 @@ temperature sensors using the [`embedded-hal`] and [`embedded-hal-async`] traits
 [`embedded-hal`]: https://github.com/rust-embedded/embedded-hal
 [`embedded-hal-async`]: https://github.com/rust-embedded/embedded-hal
 
+This driver can be used both synchronously or asynchronously. It defaults to the
+synchronous implementation, but you can switch to the asynchronous one by using
+the `async` feature.
+
 ## The device
 
 The AHT20 sensor is a humidity and temperature sensor, that is fully
@@ -62,7 +66,7 @@ the altitude.
 ## Usage
 
 To use this driver, import what you need from this crate and an `embedded-hal`
-implentation, then instatiate the device.
+implementation, then instantiate the device.
 
 ```rust,no_run
 use embedded_aht20::{Aht20, DEFAULT_I2C_ADDRESS};
