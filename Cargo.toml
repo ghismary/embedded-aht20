@@ -23,7 +23,7 @@ crc = "3.2.1"
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
 maybe-async-cfg = "0.2.5"
-weather-utils = { version = "0.2.0", features = ["no-std"] }
+weather-utils = { version = "0.2.1", features = ["no-std"] }
 
 [dev-dependencies]
 embedded-hal-mock = { version = "0.11.1", default-features = false, features = [
