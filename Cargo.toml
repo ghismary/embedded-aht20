@@ -1,6 +1,6 @@
 [package]
 name = "embedded-aht20"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Ghislain MARY <ghislain@ghislainmary.fr>"]
 repository = "https://github.com/ghismary/embedded-aht20"
 license = "MIT OR Apache-2.0"
