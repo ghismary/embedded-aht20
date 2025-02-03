@@ -23,7 +23,7 @@ fn main() -> Result<(), embedded_aht20::Error<hal::I2CError>> {
     let measurement = sensor.measure()?;
     println!(
         "Temperature: {:.2} °C, Relative humidity: {:.2} %",
-        measurement.temperature.celcius(),
+        measurement.temperature.celsius(),
         measurement.relative_humidity
     );
     Ok(())
