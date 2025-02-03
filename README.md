@@ -1,4 +1,6 @@
 [![crates.io](https://img.shields.io/crates/v/embedded-aht20.svg)](https://crates.io/crates/embedded-aht20)
+[![Github status](https://github.com/ghismary/embedded-aht20/actions/workflows/general.yml/badge.svg)](https://github.com/ghismary/embedded-aht20)
+[![codecov](https://codecov.io/gh/ghismary/embedded-aht20/graph/badge.svg?token=CA8NP9BZEA)](https://codecov.io/gh/ghismary/embedded-aht20)
 [![License](https://img.shields.io/crates/l/embedded-aht20.svg)](https://crates.io/crates/embedded-aht20)
 [![Documentation](https://docs.rs/embedded-aht20/badge.svg)](https://docs.rs/embedded-aht20)
 
