@@ -18,15 +18,16 @@ default = []
 async = []
 
 [dependencies]
-bitflags = "2.6.0"
-crc = "3.2.1"
-embedded-hal = "1.0.0"
-embedded-hal-async = "1.0.0"
-maybe-async-cfg = "0.2.5"
-weather-utils = { version = "0.2.1", features = ["no-std"] }
+bitflags = "2.8"
+crc = "3.2"
+embedded-hal = "1.0"
+embedded-hal-async = "1.0"
+maybe-async-cfg = "0.2"
+weather-utils = { version = "0.3", features = ["no-std"] }
 
 [dev-dependencies]
-embedded-hal-mock = { version = "0.11.1", default-features = false, features = [
+approx = "0.5"
+embedded-hal-mock = { version = "0.11", default-features = false, features = [
     "eh1",
 ] }
-linux-embedded-hal = "0.4.0"
+linux-embedded-hal = "0.4"

@@ -13,7 +13,7 @@ use embedded_hal_async as hal;
 use hal::delay::DelayNs;
 use hal::i2c::{I2c, SevenBitAddress};
 
-use weather_utils::{unit::Celcius, TemperatureAndRelativeHumidity};
+use weather_utils::{unit::Celsius, TemperatureAndRelativeHumidity};
 
 /// The default I2C address.
 pub const DEFAULT_I2C_ADDRESS: SevenBitAddress = 0x38;
@@ -77,9 +77,9 @@ impl SensorMeasurement {
     }
 }
 
-impl From<SensorMeasurement> for TemperatureAndRelativeHumidity<Celcius> {
+impl From<SensorMeasurement> for TemperatureAndRelativeHumidity<Celsius> {
     fn from(value: SensorMeasurement) -> Self {
-        TemperatureAndRelativeHumidity::<Celcius>::new(value.temperature(), value.humidity())
+        TemperatureAndRelativeHumidity::<Celsius>::new(value.temperature(), value.humidity())
     }
 }
 
@@ -146,7 +146,7 @@ where
     )]
     pub async fn measure(
         &mut self,
-    ) -> Result<TemperatureAndRelativeHumidity<Celcius>, Error<I2C::Error>> {
+    ) -> Result<TemperatureAndRelativeHumidity<Celsius>, Error<I2C::Error>> {
         self.send_trigger_measurement().await?;
 
         // Wait for measurement to be ready
@@ -248,11 +248,79 @@ where
 #[cfg(test)]
 mod tests {
     use crate::*;
+    use approx::assert_relative_eq;
+    use embedded_hal::i2c::ErrorKind;
     use embedded_hal_mock::eh1::delay::StdSleep as Delay;
     use embedded_hal_mock::eh1::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
 
     #[test]
-    fn measure() {
+    fn test_i2c_error() {
+        let error: Error<hal::i2c::ErrorKind> = hal::i2c::ErrorKind::Other.into();
+        assert!(matches!(error, Error::I2c(_)));
+    }
+
+    #[test]
+    fn test_sensor_measurement() {
+        let measurement: SensorMeasurement = [0x7b, 0xb3, 0x05, 0x9d, 0x49].as_slice().into();
+        assert_eq!(measurement.raw_humidity, 0x0007bb30);
+        assert_eq!(measurement.raw_temperature, 0x00059d49);
+        assert_relative_eq!(measurement.humidity(), 48.32, epsilon = 0.01);
+        assert_relative_eq!(measurement.temperature(), 20.18, epsilon = 0.01);
+    }
+
+    #[test]
+    fn test_aht20_creation_with_busy() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::BUSY.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, INITIALIZATION_COMMAND.to_vec()),
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let _device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        i2c.done();
+    }
+
+    #[test]
+    fn test_aht20_creation_with_check_status_error() {
+        let expectations = [I2cTransaction::write_read(
+            DEFAULT_I2C_ADDRESS,
+            CHECK_STATUS_COMMAND.to_vec(),
+            [SensorStatus::BUSY.bits()].to_vec(),
+        )
+        .with_error(ErrorKind::Bus)];
+        let mut i2c = I2cMock::new(&expectations);
+        let err = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {});
+        assert!(matches!(err, Err(Error::I2c(ErrorKind::Bus))));
+        i2c.done();
+    }
+
+    #[test]
+    fn test_aht20_creation_with_initialization_error() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::BUSY.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, INITIALIZATION_COMMAND.to_vec())
+                .with_error(ErrorKind::Other),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let err = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {});
+        assert!(matches!(err, Err(Error::I2c(ErrorKind::Other))));
+        i2c.done();
+    }
+
+    #[test]
+    fn test_measure() {
         let expectations = [
             I2cTransaction::write_read(
                 DEFAULT_I2C_ADDRESS,
@@ -267,19 +335,122 @@ mod tests {
             ),
             I2cTransaction::read(
                 DEFAULT_I2C_ADDRESS,
-                [0b0000_1000, 0x7b, 0xb3, 0x05, 0x9d, 0x49, 0x7d].to_vec(),
+                [
+                    SensorStatus::CALIBRATED.bits(),
+                    0x7b,
+                    0xb3,
+                    0x05,
+                    0x9d,
+                    0x49,
+                    0x7d,
+                ]
+                .to_vec(),
             ),
         ];
         let mut i2c = I2cMock::new(&expectations);
         let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
         let measurement = device.measure().unwrap();
-        assert!((measurement.temperature.celcius() - 20.18).abs() < 0.01);
-        assert!((measurement.relative_humidity - 48.32).abs() < 0.01);
+        assert_relative_eq!(measurement.temperature.celsius(), 20.18, epsilon = 0.01);
+        assert_relative_eq!(measurement.relative_humidity, 48.32, epsilon = 0.01);
         i2c.done();
     }
 
     #[test]
-    fn soft_reset() {
+    fn test_measure_with_trigger_measurement_error() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, TRIGGER_MEASUREMENT_COMMAND.to_vec())
+                .with_error(ErrorKind::ArbitrationLoss),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        let err = device.measure().expect_err("Arbitration loss");
+        assert!(matches!(err, Error::I2c(ErrorKind::ArbitrationLoss)));
+        i2c.done();
+    }
+
+    #[test]
+    fn test_measure_with_measure_read_error() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, TRIGGER_MEASUREMENT_COMMAND.to_vec()),
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::read(
+                DEFAULT_I2C_ADDRESS,
+                [
+                    SensorStatus::CALIBRATED.bits(),
+                    0x7b,
+                    0xb3,
+                    0x05,
+                    0x9d,
+                    0x49,
+                    0x7d,
+                ]
+                .to_vec(),
+            )
+            .with_error(ErrorKind::ArbitrationLoss),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        let err = device.measure().expect_err("Arbitration loss");
+        assert!(matches!(err, Error::I2c(ErrorKind::ArbitrationLoss)));
+        i2c.done();
+    }
+
+    #[test]
+    fn test_measure_with_busy_and_unexpected_busy_error() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, TRIGGER_MEASUREMENT_COMMAND.to_vec()),
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [(SensorStatus::CALIBRATED | SensorStatus::BUSY).bits()].to_vec(),
+            ),
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::read(
+                DEFAULT_I2C_ADDRESS,
+                [
+                    (SensorStatus::CALIBRATED | SensorStatus::BUSY).bits(),
+                    0x7b,
+                    0xb3,
+                    0x05,
+                    0x9d,
+                    0x49,
+                    0x91,
+                ]
+                .to_vec(),
+            ),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        let err = device.measure().expect_err("Unexpected Busy");
+        assert!(matches!(err, Error::UnexpectedBusy));
+        i2c.done();
+    }
+
+    #[test]
+    fn test_soft_reset() {
         let expectations = [
             I2cTransaction::write_read(
                 DEFAULT_I2C_ADDRESS,
@@ -291,6 +462,24 @@ mod tests {
         let mut i2c = I2cMock::new(&expectations);
         let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
         device.soft_reset().unwrap();
+        i2c.done();
+    }
+
+    #[test]
+    fn test_soft_reset_with_error() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, SOFT_RESET_COMMAND.to_vec())
+                .with_error(ErrorKind::Overrun),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        let err = device.soft_reset().expect_err("Overrun");
+        assert!(matches!(err, Error::I2c(ErrorKind::Overrun)));
         i2c.done();
     }
 }
