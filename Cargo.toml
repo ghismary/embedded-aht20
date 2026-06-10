@@ -30,4 +30,6 @@ approx = "0.5"
 embedded-hal-mock = { version = "0.11", default-features = false, features = [
     "eh1",
 ] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
 linux-embedded-hal = "0.4"
