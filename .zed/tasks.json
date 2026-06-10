@@ -1,0 +1,52 @@
+[
+  {
+    "label": "Build Debug",
+    "command": "cargo build",
+    "hide": "on_success",
+  },
+  {
+    "label": "Build Release",
+    "command": "cargo build --release",
+    "hide": "on_success",
+  },
+  {
+    "label": "Test",
+    "command": "cargo test",
+    "hide": "never",
+  },
+  {
+    "label": "Build Debug async",
+    "command": "cargo build --no-default-features --features async",
+    "hide": "on_success",
+  },
+  {
+    "label": "Build Release async",
+    "command": "cargo build --release --no-default-features --features async",
+    "hide": "on_success",
+  },
+  {
+    "label": "Test async",
+    "command": "cargo test --no-default-features --features async",
+    "hide": "never",
+  },
+  {
+    "label": "Clippy",
+    "command": "cargo clippy",
+    "hide": "never",
+  },
+  {
+    "label": "Code coverage",
+    "command": "cargo tarpaulin --workspace",
+    "hide": "never",
+  },
+  {
+    "label": "Generate documentation",
+    "command": "cargo doc --open",
+    "hide": "on_success",
+  },
+  {
+    "label": "Clean",
+    "command": "cargo clean",
+    "hide": "on_success",
+  },
+]
