@@ -13,7 +13,8 @@ use embedded_hal_async as hal;
 use hal::delay::DelayNs;
 use hal::i2c::{I2c, SevenBitAddress};
 
-use weather_utils::{unit::Celsius, TemperatureAndRelativeHumidity};
+pub use weather_utils::Temperature;
+use weather_utils::{Celsius, RelativeHumidity, TemperatureAndRelativeHumidity};
 
 /// The default I2C address.
 pub const DEFAULT_I2C_ADDRESS: SevenBitAddress = 0x38;
@@ -79,7 +80,10 @@ impl SensorMeasurement {
 
 impl From<SensorMeasurement> for TemperatureAndRelativeHumidity<Celsius> {
     fn from(value: SensorMeasurement) -> Self {
-        TemperatureAndRelativeHumidity::<Celsius>::new(value.temperature(), value.humidity())
+        TemperatureAndRelativeHumidity {
+            temperature: Celsius(value.temperature()),
+            relative_humidity: RelativeHumidity::new(value.humidity()).unwrap(),
+        }
     }
 }
 
@@ -247,11 +251,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
     use approx::assert_relative_eq;
     use embedded_hal::i2c::ErrorKind;
     use embedded_hal_mock::eh1::delay::StdSleep as Delay;
     use embedded_hal_mock::eh1::i2c::{Mock as I2cMock, Transaction as I2cTransaction};
+
+    use super::*;
+    use crate::Temperature;
 
     #[test]
     fn test_i2c_error() {
@@ -350,8 +356,11 @@ mod tests {
         let mut i2c = I2cMock::new(&expectations);
         let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
         let measurement = device.measure().unwrap();
-        assert_relative_eq!(measurement.temperature.celsius(), 20.18, epsilon = 0.01);
-        assert_relative_eq!(measurement.relative_humidity, 48.32, epsilon = 0.01);
+        assert_eq!(measurement.temperature.celsius(), Celsius(20.18));
+        assert_eq!(
+            measurement.relative_humidity,
+            RelativeHumidity::new(48.32).unwrap()
+        );
         i2c.done();
     }
 
