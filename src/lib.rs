@@ -459,6 +459,46 @@ mod tests {
     }
 
     #[test]
+    fn test_measure_with_invalid_crc() {
+        let expectations = [
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::write(DEFAULT_I2C_ADDRESS, TRIGGER_MEASUREMENT_COMMAND.to_vec()),
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [(SensorStatus::CALIBRATED | SensorStatus::BUSY).bits()].to_vec(),
+            ),
+            I2cTransaction::write_read(
+                DEFAULT_I2C_ADDRESS,
+                CHECK_STATUS_COMMAND.to_vec(),
+                [SensorStatus::CALIBRATED.bits()].to_vec(),
+            ),
+            I2cTransaction::read(
+                DEFAULT_I2C_ADDRESS,
+                [
+                    (SensorStatus::CALIBRATED | SensorStatus::BUSY).bits(),
+                    0x7b,
+                    0xb3,
+                    0x05,
+                    0x9d,
+                    0x49,
+                    0x90,
+                ]
+                .to_vec(),
+            ),
+        ];
+        let mut i2c = I2cMock::new(&expectations);
+        let mut device = Aht20::new(&mut i2c, DEFAULT_I2C_ADDRESS, Delay {}).unwrap();
+        let err = device.measure().expect_err("Invalid CRC");
+        assert!(matches!(err, Error::InvalidCrc));
+        i2c.done();
+    }
+
+    #[test]
     fn test_soft_reset() {
         let expectations = [
             I2cTransaction::write_read(
