@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/ghismary/embedded-aht20/compare/v0.2.0...v0.3.0) - 2026-06-10
+
+### Fixed
+
+- Update tests so that they can build on platforms other than Linux
+
+### Other
+
+- Improve code coverage
+- Add zed tasks
+- Update CI workflows
+- Update dependencies
+
 ## [0.2.0](https://github.com/ghismary/embedded-aht20/compare/v0.1.3...v0.2.0) - 2025-02-03
 
 ### Added
