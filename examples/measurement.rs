@@ -24,9 +24,17 @@ mod linux {
         // Perform a temperature and humidity measurement
         let measurement = sensor.measure()?;
         println!(
-            "Temperature: {:.2} °C, Relative humidity: {:.2} %",
+            "Temperature: {:.2} °C, Relative humidity: {:.2} %, Absolute humidity: {:.2} g/m³",
             measurement.temperature.celsius().value(),
-            measurement.relative_humidity.value()
+            measurement.relative_humidity.value(),
+            measurement.absolute_humidity()
+        );
+        let heat_index = measurement.heat_index();
+        println!(
+            "Dew point: {:.2} °C, Heat index: {:2} °C, Comfort: {:?}",
+            measurement.dew_point().celsius().value(),
+            heat_index.celsius().value(),
+            heat_index.comfort()
         );
         Ok(())
     }
